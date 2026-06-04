@@ -8,7 +8,7 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 const SESSIONS_DIR = path.join(__dirname, 'sessions');
 
-// Render 서버인지 확인하는 변수 (Render는 RENDER 환경변수를 자동으로 true로 설정함)
+// Render 서버인지 확인하는 변수
 const isServer = process.env.RENDER === 'true';
 
 // 세션 디렉토리 없으면 생성
@@ -40,7 +40,6 @@ async function runBot(username, forceLogin = false) {
   const authFile = getAuthPath(username);
   let browser;
   try {
-    // 로컬에서 강제 로그인 시에만 화면을 띄움 (서버에서는 무조건 headless)
     const shouldBeHeadless = isServer ? true : !forceLogin;
 
     browser = await chromium.launch({ 
@@ -115,7 +114,6 @@ async function runBot(username, forceLogin = false) {
         if (await loginBtn.count() > 0) await loginBtn.first().click();
       } catch (e) {}
 
-      // 로컬에서는 사람이 로그인할 시간을 넉넉히 줌, 서버에서는 짧게
       const maxAttempts = isServer ? 10 : 100;
       for (let i = 0; i < maxAttempts; i++) {
         await page.waitForTimeout(3000);
@@ -142,7 +140,7 @@ async function runBot(username, forceLogin = false) {
     let apiResultMessage = "🎉 출석체크 요청 완료";
     let apiSuccess = true;
 
-    const responsePromise = page.waitForResponse(r => r.url().includes('/api/trpc/attendance.scan'), { timeout: 8000 })
+    const responsePromise = page.waitForResponse(r => r.url().includes('/api/trpc/attendance.scan'), { timeout: 10000 })
       .then(async (r) => {
         const data = await r.json();
         if (data[0]?.result?.data?.json?.message || data[0]?.result?.data?.message) {
@@ -160,6 +158,7 @@ async function runBot(username, forceLogin = false) {
     return { success: apiSuccess, message: apiResultMessage };
 
   } catch (error) {
+    console.error(`[작업 실패 - ${username}]:`, error.message);
     return { success: false, message: `❌ 오류: ${error.message}` };
   } finally {
     if (browser) await browser.close();
@@ -174,7 +173,10 @@ async function checkSessionStatus(username) {
   try {
     const fileContent = fs.readFileSync(authFile, 'utf-8');
     if (fileContent.trim() === '') return { isLoggedin: false, message: '빈 세션 (로그인 필요)' };
-  } catch(e) {}
+    JSON.parse(fileContent); // JSON 형식 검증
+  } catch(e) {
+    return { isLoggedin: false, message: '⚠️ 유효하지 않은 파일 형식 (JSON 오류)' };
+  }
 
   let browser;
   try {
@@ -183,13 +185,9 @@ async function checkSessionStatus(username) {
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     });
     
-    let contextOptions = {};
-    if (fs.existsSync(authFile)) {
-       contextOptions.storageState = authFile;
-    }
-    const context = await browser.newContext(contextOptions);
+    const context = await browser.newContext({ storageState: authFile });
     const page = await context.newPage();
-    const response = await page.request.get('https://qrattend-ffrof5pm.manus.space/api/trpc/qr.getCurrent?batch=1&input=%7B%7D');
+    const response = await page.request.get('https://qrattend-ffrof5pm.manus.space/api/trpc/qr.getCurrent?batch=1&input=%7B%7D', { timeout: 15000 });
     const data = await response.json();
     const isLoggedin = !!(data[0]?.result?.data?.json?.token || data[0]?.result?.data?.token);
     
@@ -198,7 +196,10 @@ async function checkSessionStatus(username) {
       message: isLoggedin ? '✅ 세션 유효함 (출첵 가능)' : '⚠️ 세션 만료됨 (재로그인 또는 업로드 필요)' 
     };
   } catch (e) {
-    return { isLoggedin: false, message: '❌ 상태 확인 오류' };
+    console.error(`[상태 확인 실패 - ${username}]:`, e.message);
+    // 에러 메시지가 너무 길면 잘라서 전송
+    const shortError = e.message.length > 60 ? e.message.substring(0, 60) + '...' : e.message;
+    return { isLoggedin: false, message: `❌ 오류: ${shortError}` };
   } finally {
     if (browser) await browser.close();
   }
@@ -412,7 +413,7 @@ app.get('/api/signup', (req, res) => {
   if (!name) return res.json({ success: false, message: '이름을 입력하세요.' });
   const filePath = getAuthPath(name);
   if (fs.existsSync(filePath)) return res.json({ success: false, message: '이미 존재하는 이름입니다.' });
-  fs.writeFileSync(filePath, ''); // 빈 파일로 생성
+  fs.writeFileSync(filePath, ''); 
   res.json({ success: true, message: `${name}님 등록 완료! 목록에서 선택 후 접속해주세요.` });
 });
 
@@ -430,9 +431,4 @@ app.get('/api/login', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 멀티 유저 출석체크 서버 실행: http://localhost:${PORT}`);
-  if (isServer) {
-    console.log('☁️ Render 호스팅 환경 모드로 실행 중 (Headless 강제)');
-  } else {
-    console.log('💻 로컬 PC 환경 모드로 실행 중 (브라우저 로그인 가능)');
-  }
 });
