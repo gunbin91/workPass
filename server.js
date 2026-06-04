@@ -37,9 +37,13 @@ async function runBot(username, forceLogin = false) {
   let browser;
   try {
     browser = await chromium.launch({ 
-      headless: !forceLogin,
-      channel: 'chrome',
-      args: ['--disable-blink-features=AutomationControlled']
+      headless: true, // 서버 환경(Render)에서는 반드시 headless여야 합니다.
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage'
+      ]
     });
     
     let contextOptions = {
@@ -155,7 +159,10 @@ async function checkSessionStatus(username) {
   
   let browser;
   try {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({ 
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
     const context = await browser.newContext({ storageState: authFile });
     const page = await context.newPage();
     const response = await page.request.get('https://qrattend-ffrof5pm.manus.space/api/trpc/qr.getCurrent?batch=1&input=%7B%7D');
