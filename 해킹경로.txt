@@ -1,0 +1,10 @@
+- 토큰생성
+https://qrattend-ffrof5pm.manus.space/api/trpc/qr.getCurrent?batch=1&input=%7B%7D
+
+- 큐알생성
+https://qrattend-ffrof5pm.manus.space/kiosk
+
+- 큐알출첵
+https://qrattend-ffrof5pm.manus.space/scan?token=
+=> 실제 POST 경로
+	https://qrattend-ffrof5pm.manus.space/api/trpc/attendance.scan?batch=1
