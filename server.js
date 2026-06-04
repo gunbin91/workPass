@@ -241,25 +241,27 @@ app.get('/', async (req, res) => {
       <head>
         <title>QR 출석체크 - 메인</title>
         <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
         <style>
-          body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; background: #f0f2f5; text-align: center; color: #333; }
-          .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: inline-block; width: 100%; max-width: 450px; text-align: left; }
-          h1 { color: #0081f2; text-align: center; margin-top: 0; }
-          .card { border: 1px solid #e2e8f0; padding: 20px; border-radius: 10px; margin-bottom: 20px; background: #fafafa; }
-          input[type="text"] { padding: 12px; border: 1px solid #ddd; border-radius: 6px; width: 65%; margin-right: 5px; box-sizing: border-box; }
-          button { border: none; padding: 12px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+          * { box-sizing: border-box; }
+          body { font-family: 'Malgun Gothic', sans-serif; padding: 15px; margin: 0; background: #f0f2f5; text-align: center; color: #333; }
+          .container { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 450px; text-align: left; display: inline-block; }
+          h1 { color: #0081f2; text-align: center; margin-top: 0; font-size: 22px; }
+          .card { border: 1px solid #e2e8f0; padding: 15px; border-radius: 10px; margin-bottom: 20px; background: #fafafa; }
+          .input-group { display: flex; gap: 8px; }
+          input[type="text"] { padding: 12px; border: 1px solid #ddd; border-radius: 6px; width: 100%; font-size: 16px; }
+          button { border: none; padding: 12px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; white-space: nowrap; font-size: 15px; }
           .btn-blue { background: #3b82f6; color: white; }
           .btn-blue:hover { background: #2563eb; }
-          .user-list-title { margin: 25px 0 10px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+          .user-list-title { margin: 20px 0 10px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
           .user-item { 
             padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 10px; 
             display: flex; justify-content: space-between; align-items: center; background: white;
-            cursor: pointer; transition: 0.2s;
+            cursor: pointer; transition: 0.2s; word-break: break-all;
           }
           .user-item:hover { border-color: #3b82f6; background: #f0f9ff; transform: translateX(5px); }
-          .user-name { font-size: 17px; font-weight: bold; }
-          .badge { font-size: 11px; padding: 3px 8px; border-radius: 10px; background: #e2e8f0; color: #666; }
+          .user-name { font-size: 16px; font-weight: bold; }
+          .badge { font-size: 12px; padding: 4px 8px; border-radius: 10px; background: #e2e8f0; color: #666; }
         </style>
       </head>
       <body>
@@ -268,9 +270,9 @@ app.get('/', async (req, res) => {
           
           <div class="card">
             <h3 style="margin-top:0; font-size:15px; color:#666;">사용자 등록 (이름만 입력)</h3>
-            <div style="display: flex;">
+            <div class="input-group">
               <input type="text" id="newUsername" placeholder="예: 홍길동">
-              <button class="btn-blue" onclick="signup()" style="flex: 1;">등록</button>
+              <button class="btn-blue" onclick="signup()">등록</button>
             </div>
           </div>
 
@@ -308,14 +310,15 @@ app.get('/', async (req, res) => {
     <head>
       <title>${username}님의 관리실</title>
       <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
       <style>
-        body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; background: #f0f2f5; text-align: center; }
-        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: inline-block; width: 100%; max-width: 500px; text-align: left; }
+        * { box-sizing: border-box; }
+        body { font-family: 'Malgun Gothic', sans-serif; padding: 15px; margin: 0; background: #f0f2f5; text-align: center; }
+        .container { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 500px; display: inline-block; text-align: left; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px; }
-        .user-name { font-size: 20px; font-weight: bold; color: #0081f2; }
-        .btn-back { font-size: 13px; color: #666; text-decoration: none; border: 1px solid #ddd; padding: 6px 12px; border-radius: 4px; background: white; }
-        .status-box { margin-bottom: 25px; padding: 15px; border-radius: 8px; font-size: 14px; background: #f8fafc; border: 1px solid #e2e8f0; text-align: center; }
+        .user-name { font-size: 18px; font-weight: bold; color: #0081f2; word-break: break-all; margin-right: 10px; }
+        .btn-back { font-size: 13px; color: #666; text-decoration: none; border: 1px solid #ddd; padding: 6px 12px; border-radius: 4px; background: white; white-space: nowrap; }
+        .status-box { margin-bottom: 20px; padding: 15px; border-radius: 8px; font-size: 14px; background: #f8fafc; border: 1px solid #e2e8f0; text-align: center; word-break: keep-all; }
         button { border: none; padding: 16px; border-radius: 10px; font-size: 15px; font-weight: bold; cursor: pointer; transition: 0.2s; width: 100%; margin-bottom: 12px; }
         .btn-checkin { background: #22c55e; color: white; }
         .btn-checkin:hover { background: #16a34a; transform: translateY(-2px); }
@@ -323,10 +326,10 @@ app.get('/', async (req, res) => {
         .btn-refresh:hover { background: #2563eb; transform: translateY(-2px); }
         .upload-card { border: 1px dashed #cbd5e1; padding: 15px; border-radius: 8px; background: #f8fafc; margin-bottom: 12px; }
         .upload-card label { font-size: 13px; font-weight: bold; color: #475569; display: block; margin-bottom: 8px; }
-        input[type="file"] { width: 100%; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px; font-size: 13px;}
+        input[type="file"] { width: 100%; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px; font-size: 13px; box-sizing: border-box; }
         .btn-upload { background: #64748b; color: white; padding: 10px; font-size: 14px; margin-bottom: 0; }
         .btn-upload:hover { background: #475569; }
-        #result { margin-top: 20px; padding: 15px; border-radius: 8px; font-weight: bold; display: none; white-space: pre-wrap; word-break: break-all; }
+        #result { margin-top: 20px; padding: 15px; border-radius: 8px; font-weight: bold; display: none; white-space: pre-wrap; word-break: break-all; font-size: 14px; }
         .loading-dots:after { content: '...'; animation: dots 1.5s steps(5, end) infinite; }
         @keyframes dots { 0%, 20% { color: rgba(0,0,0,0); text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0); } 40% { color: #555; text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0); } 60% { text-shadow: .25em 0 0 #555, .5em 0 0 rgba(0,0,0,0); } 80%, 100% { text-shadow: .25em 0 0 #555, .5em 0 0 #555; } }
       </style>
