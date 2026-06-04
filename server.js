@@ -16,6 +16,24 @@ if (!fs.existsSync(SESSIONS_DIR)) {
   fs.mkdirSync(SESSIONS_DIR);
 }
 
+// ============================================
+// 🔄 Render 환경변수에서 세션 복원
+// ============================================
+Object.keys(process.env).forEach(key => {
+  if (key.startsWith('SESSION_DATA_')) {
+    // 키가 "SESSION_DATA_GUNBIN" 이라면 username은 "GUNBIN"이 됨
+    const username = key.replace('SESSION_DATA_', '');
+    const sessionFilePath = path.join(SESSIONS_DIR, `${username}.json`);
+    try {
+      // 환경변수에 저장된 값을 파일로 저장
+      fs.writeFileSync(sessionFilePath, process.env[key], 'utf-8');
+      console.log(`✅ [환경변수 복원] ${username}.json 파일 생성 완료`);
+    } catch (e) {
+      console.error(`❌ [환경변수 복원 실패] ${username}:`, e.message);
+    }
+  }
+});
+
 // 📍 현재 PC 기준 고정 위치 정보
 const FIXED_LOCATION = {
   latitude: 37.4784,
