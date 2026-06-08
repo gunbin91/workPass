@@ -223,6 +223,73 @@ async function checkSessionStatus(username) {
   }
 }
 
+// 근태 기록 가져오기 함수
+async function fetchRecords(username) {
+  const authFile = getAuthPath(username);
+  if (!fs.existsSync(authFile)) return { success: false, message: '저장된 세션이 없습니다.' };
+
+  let browser;
+  try {
+    browser = await chromium.launch({ 
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
+    
+    const context = await browser.newContext({ storageState: authFile });
+    const page = await context.newPage();
+    
+    // 이달의 시작일과 종료일 계산
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    
+    // YYYY-MM-DD 형식 포맷팅
+    const formatDate = (d) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}T00:00:00.000Z`; // UTC 기준으로 요청하는 것 같음
+    };
+
+    const startStr = formatDate(firstDay);
+    const endStr = formatDate(lastDay);
+
+    // URI 인코딩된 tRPC 요청 (attendance.myRange)
+    // input = {"0":{"json":{"start":"2024-05-31T15:00:00.000Z","end":"2024-06-30T14:59:59.999Z"}}}
+    // 로컬 타임존 이슈를 피하기 위해 간단히 이번달 데이터를 범위로 요청
+    const inputObj = {
+      "0": {
+        "json": {
+          "from": startStr,
+          "to": endStr
+        }
+      }
+    };
+    const encodedInput = encodeURIComponent(JSON.stringify(inputObj));
+    const url = `https://qrattend-ffrof5pm.manus.space/api/trpc/attendance.myRange?batch=1&input=${encodedInput}`;
+
+    const response = await page.request.get(url, { timeout: 15000 });
+    const data = await response.json();
+    
+    // 에러 체크
+    if (data[0]?.error) {
+       console.error(`[기록 API 에러 - ${username}]:`, JSON.stringify(data[0].error, null, 2));
+       const apiErrorMsg = data[0].error.json?.message || data[0].error.message || '알 수 없는 API 에러';
+       return { success: false, message: `데이터 요청 실패: ${apiErrorMsg}` };
+    }
+
+    const records = data[0]?.result?.data?.json || data[0]?.result?.data || [];
+    
+    return { success: true, data: records };
+    
+  } catch (e) {
+    console.error(`[기록 조회 실패 - ${username}]:`, e.message);
+    return { success: false, message: '기록 조회 중 오류가 발생했습니다.' };
+  } finally {
+    if (browser) await browser.close();
+  }
+}
+
 // ============================================
 // 📁 파일 업로드 설정 (Multer)
 // ============================================
@@ -367,7 +434,7 @@ app.get('/', async (req, res) => {
         
         ${isServer ? '' : '<button class="btn-refresh" onclick="runAction(\'/api/login\')">🌐 (로컬 전용) 브라우저 띄워 로그인</button>'}
         
-        <div class="upload-card">
+        <div class="upload-card" style="display:none;">
           <label>📁 외부에서 만든 세션(.json) 덮어쓰기</label>
           <form action="/api/upload" method="post" enctype="multipart/form-data" style="margin:0;">
             <input type="hidden" name="username" value="${username}">
@@ -376,11 +443,15 @@ app.get('/', async (req, res) => {
           </form>
         </div>
         
-        <div style="font-size: 12px; color: #888; text-align: center; margin-top: 15px;">
+        <div style="display:none; font-size: 12px; color: #888; text-align: center; margin-top: 15px;">
           서버(Render)에서는 브라우저 띄우기가 불가능하므로,<br>로컬에서 갱신한 파일을 <b>[수동 업로드]</b> 해주셔야 합니다.
         </div>
         
         <div id="result"></div>
+        <div id="records-container" style="display:none; margin-top:20px; border-top:1px solid #eee; padding-top:15px;">
+           <h3 style="margin-top:0; color:#333; font-size:16px;">📅 근태 기록 내역</h3>
+           <div id="records-list" style="font-size:13px; text-align:left;"></div>
+        </div>
       </div>
       <script>
         const currentUser = "${username}";
@@ -393,10 +464,15 @@ app.get('/', async (req, res) => {
             statusEl.style.color = data.isLoggedin ? '#166534' : '#991b1b';
             statusEl.style.background = data.isLoggedin ? '#f0fdf4' : '#fef2f2';
             statusEl.style.borderColor = data.isLoggedin ? '#bbf7d0' : '#fecaca';
+            
+            // 세션 체크 완료 후 자동으로 기록 조회
+            viewRecords();
           } catch(e) { document.getElementById('status').innerHTML = '세션 상태 확인 실패'; }
         };
         async function runAction(endpoint) {
           const resultDiv = document.getElementById('result');
+          const recordsDiv = document.getElementById('records-container');
+          recordsDiv.style.display = 'none';
           resultDiv.style.display = 'block';
           resultDiv.style.background = '#f8fafc';
           resultDiv.style.color = '#333';
@@ -411,6 +487,115 @@ app.get('/', async (req, res) => {
                setTimeout(() => location.reload(), 1500);
             }
           } catch(e) { resultDiv.innerHTML = '서버 통신 오류가 발생했습니다.'; }
+        }
+
+        async function viewRecords() {
+          const resultDiv = document.getElementById('result');
+          const recordsContainer = document.getElementById('records-container');
+          const recordsList = document.getElementById('records-list');
+          
+          resultDiv.style.display = 'block';
+          resultDiv.style.background = '#f8fafc';
+          resultDiv.style.color = '#333';
+          resultDiv.innerHTML = '데이터를 불러오는 중... ⏳';
+          recordsContainer.style.display = 'none';
+
+          try {
+            const res = await fetch('/api/records?name=' + encodeURIComponent(currentUser));
+            const data = await res.json();
+            
+            if (!data.success) {
+               resultDiv.innerHTML = data.message;
+               resultDiv.style.background = '#fee2e2';
+               resultDiv.style.color = '#991b1b';
+               return;
+            }
+
+            resultDiv.style.display = 'none';
+            recordsContainer.style.display = 'block';
+            
+            if (!data.data || data.data.length === 0) {
+               recordsList.innerHTML = '<p style="text-align:center; color:#888;">이번달 기록이 없습니다.</p>';
+               return;
+            }
+
+            let html = '<div style="display:flex; flex-direction:column; gap:8px;">';
+            data.data.forEach(record => {
+               const workDate = record.workDate || '날짜 알수없음';
+               
+               // 시간 포맷팅 헬퍼 (밀리초 타임스탬프)
+               const formatTime = (ts) => {
+                 if (!ts) return '—';
+                 const d = new Date(ts);
+                 const h = String(d.getHours()).padStart(2, '0');
+                 const m = String(d.getMinutes()).padStart(2, '0');
+                 return \`\${h}:\${m}\`;
+               };
+               
+               const checkIn = formatTime(record.checkInTime);
+               const checkOut = formatTime(record.checkOutTime);
+               
+               // 근무 시간 계산
+               let duration = '—';
+               if (record.checkInTime && record.checkOutTime) {
+                 const diffMins = Math.floor((record.checkOutTime - record.checkInTime) / 60000);
+                 const h = Math.floor(diffMins / 60);
+                 const m = diffMins % 60;
+                 duration = \`\${h}h \${m}m\`;
+               }
+
+               // 상태 번역 및 뱃지 색상
+               let statusText = record.status;
+               let statusBg = '#f1f5f9';
+               let statusColor = '#475569';
+               
+               if (record.status === 'present') {
+                 statusText = '정상 출근';
+                 statusBg = '#dcfce3';
+                 statusColor = '#166534';
+               } else if (record.status === 'late') {
+                 statusText = '지각';
+                 statusBg = '#fee2e2';
+                 statusColor = '#991b1b';
+               } else if (record.status === 'absent') {
+                 statusText = '결근';
+                 statusBg = '#fef08a';
+                 statusColor = '#9a3412';
+               }
+
+               html += \`
+                 <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                   <div style="flex: 1;">
+                     <div style="font-weight: bold; color: #1e293b; margin-bottom: 6px; font-size: 14px;">📅 \${workDate}</div>
+                     <div style="display: flex; gap: 16px; font-size: 12px; color: #64748b;">
+                       <div style="display: flex; flex-direction: column;">
+                         <span style="font-size: 10px; color: #94a3b8;">출근</span>
+                         <span style="font-weight: 600; color: #334155;">\${checkIn}</span>
+                       </div>
+                       <div style="display: flex; flex-direction: column;">
+                         <span style="font-size: 10px; color: #94a3b8;">퇴근</span>
+                         <span style="font-weight: 600; color: #334155;">\${checkOut}</span>
+                       </div>
+                       <div style="display: flex; flex-direction: column;">
+                         <span style="font-size: 10px; color: #94a3b8;">근무시간</span>
+                         <span style="font-weight: 600; color: #0f172a;">\${duration}</span>
+                       </div>
+                     </div>
+                   </div>
+                   <div>
+                     <span style="background: \${statusBg}; color: \${statusColor}; padding: 6px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; white-space: nowrap;">\${statusText}</span>
+                   </div>
+                 </div>
+               \`;
+            });
+            html += '</div>';
+            recordsList.innerHTML = html;
+
+          } catch(e) {
+            resultDiv.innerHTML = '기록을 가져오는 중 서버 통신 오류가 발생했습니다.';
+            resultDiv.style.background = '#fee2e2';
+            resultDiv.style.color = '#991b1b';
+          }
         }
       </script>
     </body>
@@ -444,6 +629,10 @@ app.get('/api/status', async (req, res) => {
 
 app.get('/api/checkin', async (req, res) => {
   res.json(await runBot(req.query.name, false));
+});
+
+app.get('/api/records', async (req, res) => {
+  res.json(await fetchRecords(req.query.name));
 });
 
 app.get('/api/login', async (req, res) => {
