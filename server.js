@@ -431,6 +431,7 @@ app.get('/', async (req, res) => {
         <div id="status" class="status-box">현재 세션 상태: <span class="loading-dots">확인 중</span></div>
         
         <button class="btn-checkin" onclick="runAction('/api/checkin')">✅ 출석체크 실행</button>
+        <button class="btn-records" onclick="viewRecords()" style="background: #8b5cf6; color: white;">출근기록확인</button>
         
         ${isServer ? '' : '<button class="btn-refresh" onclick="runAction(\'/api/login\')">🌐 (로컬 전용) 브라우저 띄워 로그인</button>'}
         
@@ -465,8 +466,7 @@ app.get('/', async (req, res) => {
             statusEl.style.background = data.isLoggedin ? '#f0fdf4' : '#fef2f2';
             statusEl.style.borderColor = data.isLoggedin ? '#bbf7d0' : '#fecaca';
             
-            // 세션 체크 완료 후 자동으로 기록 조회
-            viewRecords();
+            // 세션 체크 완료
           } catch(e) { document.getElementById('status').innerHTML = '세션 상태 확인 실패'; }
         };
         async function runAction(endpoint) {
