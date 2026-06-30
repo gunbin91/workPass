@@ -1,0 +1,25 @@
+name: Keep Render Alive
+
+on:
+  # 1. 스케줄을 통한 자동 실행 (Cron)
+  schedule:
+    # 15분마다 실행 (Render는 15분 미사용시 슬립 모드로 들어가므로)
+    - cron: '*/14 * * * *'
+    
+    # 만약 특정 시간에만 켜고 싶다면 아래처럼 변경하세요 (UTC 기준)
+    # 예: 매일 아침 8시(한국시간) -> UTC 밤 11시(23:00)
+    # - cron: '0 23 * * *'
+
+  # 2. 수동으로 실행해볼 수 있는 버튼 추가
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render Server
+        # Render 서버 주소 호출
+        run: curl -s https://workpass-bckh.onrender.com/ > /dev/null
+        
+      - name: Log Time
+        run: echo "Pinged the server at $(date)"
